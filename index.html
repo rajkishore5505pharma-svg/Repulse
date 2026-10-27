@@ -1,1 +1,339 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0f1d">
+<title>RageBit | AI Push-Up Tracker</title>
+<style>
+:root{--bg:#0a0f1d;--panel:#0f172a;--cyan:#38bdf8;--green:#22c55e;--red:#ef4444;--muted:#94a3b8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#f8fafc;font:15px system-ui,sans-serif}
+header{padding:20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #263247}
+.logo{font-size:24px;font-weight:900;letter-spacing:1px;color:var(--cyan)}
+.logo span{color:white}
+nav{display:flex;gap:8px;padding:12px;overflow:auto}
+button{border:1px solid #334155;background:#172238;color:white;padding:11px 14px;border-radius:10px;font-weight:650;cursor:pointer}
+button.primary{background:var(--cyan);color:#07111f;border:0}
+button:disabled{opacity:.5}
+main{max-width:900px;margin:auto;padding:16px}
+.page{display:none}.page.active{display:block}
+.panel{background:var(--panel);border:1px solid #243247;border-radius:16px;padding:16px;margin-bottom:16px}
+h1{font-size:26px;margin:4px 0 8px}
+h2{font-size:18px;margin:0 0 12px}
+.muted{color:var(--muted)}
+.camera{position:relative;background:#020617;border-radius:12px;overflow:hidden;aspect-ratio:4/3}
+video,canvas{position:absolute;width:100%;height:100%;inset:0;object-fit:contain}
+video{transform:scaleX(-1)}canvas{transform:scaleX(-1);pointer-events:none}
+#placeholder{position:absolute;inset:0;display:grid;place-content:center;text-align:center;color:var(--muted);padding:20px}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stat{padding:15px;background:#111e32;border-radius:12px}
+.big{font-size:36px;font-weight:850;line-height:1.2}
+.cyan{color:var(--cyan)}.green{color:var(--green)}.red{color:var(--red)}
+.badge{display:inline-block;padding:8px 12px;border-radius:9px;background:#243247;font-weight:750;margin:8px 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.actions button{flex:1}
+input{width:100%;background:#020617;color:white;border:1px solid #334155;padding:12px;border-radius:9px}
+.history-item{padding:12px 0;border-bottom:1px solid #334155}
+.barrow{display:flex;align-items:end;gap:5px;height:120px;margin:18px 0}
+.barcol{flex:1;min-width:0;text-align:center;font-size:10px;color:var(--muted)}
+.bar{background:var(--cyan);border-radius:5px 5px 0 0;min-height:3px;width:100%}
+small{color:var(--muted)}
+footer{text-align:center;padding:22px;color:var(--muted);font-size:12px}
+@media(min-width:600px){.stats{grid-template-columns:repeat(4,minmax(0,1fr))}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">RAGE<span>BIT</span></div>
+  <small>AI FITNESS LAB</small>
+</header>
+<nav>
+  <button onclick="showPage('train')">Training</button>
+  <button onclick="showPage('history')">History</button>
+  <button onclick="showPage('coach')">AI Coach</button>
+</nav>
+<main>
+<section id="train" class="page active">
+  <div class="panel">
+    <h1>Push your limits.</h1>
+    <p class="muted">Real-time pose tracking. Better reps. Stronger you.</p>
+    <div class="camera">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="overlay"></canvas>
+      <div id="placeholder">CAMERA OFF<br><small>Start a session to begin</small></div>
+    </div>
+    <div class="actions">
+      <button class="primary" id="startBtn" onclick="startCamera()">Start camera</button>
+      <button id="pauseBtn" onclick="togglePause()" disabled>Pause</button>
+      <button onclick="flipCamera()">Flip camera</button>
+    </div>
+    <div class="actions">
+      <button onclick="resetWorkout()">Reset</button>
+      <button id="soundBtn" onclick="toggleSound()">Sound: On</button>
+      <button onclick="saveWorkout()">Save workout</button>
+    </div>
+    <div id="status" class="badge">Ready to train</div>
+    <p id="hint" class="muted">Allow camera access and stand sideways so your full body is visible.</p>
+    <p class="muted">Spine angle: <strong id="angle">--°</strong></p>
+    <small id="engine">Pose detector not loaded</small>
+  </div>
+  <div class="stats">
+    <div class="stat"><small>REPS</small><div class="big cyan" id="reps">0</div></div>
+    <div class="stat"><small>SESSION TIME</small><div class="big" id="duration">0:00</div></div>
+    <div class="stat"><small>GOOD FORM</small><div class="big green" id="good">0</div></div>
+    <div class="stat"><small>FORM FLAGS</small><div class="big red" id="flags">0</div></div>
+  </div>
+  <p class="muted">Keep your head, hips, and ankles in frame. Camera-based angles are estimates, not medical measurements.</p>
+</section>
+
+<section id="history" class="page">
+  <div class="panel">
+    <h1>Workout history</h1>
+    <p class="muted">Your saved sessions stay in this browser.</p>
+    <div class="stats">
+      <div class="stat"><small>WORKOUTS</small><div class="big" id="totalSessions">0</div></div>
+      <div class="stat"><small>TOTAL REPS</small><div class="big cyan" id="totalReps">0</div></div>
+      <div class="stat"><small>BEST SESSION</small><div class="big green" id="best">0</div></div>
+      <div class="stat"><small>FORM FLAGS</small><div class="big red" id="totalFlags">0</div></div>
+    </div>
+    <h2 style="margin-top:20px">Last 14 workouts</h2>
+    <div id="chart" class="barrow"></div>
+    <div id="historyList"></div>
+  </div>
+</section>
+
+<section id="coach" class="page">
+  <div class="panel">
+    <h1>RageBit Coach</h1>
+    <p class="muted">Training guidance for your next session.</p>
+    <div id="chatMessages">
+      <div class="history-item"><strong class="cyan">RageBit Coach</strong><p>Welcome! Ask me about push-up technique, training plans, or progressions.</p></div>
+    </div>
+    <form id="chatForm">
+      <input id="chatInput" placeholder="Ask about push-up training..." maxlength="500" required>
+      <div class="actions"><button class="primary" type="submit">Ask coach</button></div>
+    </form>
+    <p class="muted">Demo coach: responses are local templates, not Claude AI. Real AI needs a secure server.</p>
+  </div>
+</section>
+</main>
+<footer>RAGEBIT © Training smart, one rep at a time.</footer>
+
+<script type="module">
+const $=id=>document.getElementById(id);
+const video=$("video"), canvas=$("overlay"), ctx=canvas.getContext("2d");
+const MODEL="https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+const WASM="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+let landmarker=null,stream=null,raf=0,paused=false,front=true,sound=true;
+let reps=0,good=0,flags=0,started=0,elapsed=0,lastTick=0,lastRep=0;
+let phase="up",reachedDepth=false,invalidRep=false,tracking=false,sessionSaved=false;
+let badges={"Go Lower":0,"Hips Sagging":0,"Hips Piking":0};
+let currentStatus="Ready to train";
+
+function setStatus(s,color=""){
+  currentStatus=s;$("status").textContent=s;
+  $("status").className="badge "+color;
+}
+function updateStats(){
+  $("reps").textContent=reps;$("good").textContent=good;
+  $("flags").textContent=flags;
+  $("duration").textContent=fmt(elapsed+((tracking&&!paused)?(Date.now()-started)/1000:0));
+}
+function fmt(s){s=Math.floor(s);return Math.floor(s/60)+":"+String(s%60).padStart(2,"0")}
+function angle(a,b,c){
+  const ab=[a.x-b.x,a.y-b.y],cb=[c.x-b.x,c.y-b.y];
+  const dot=ab[0]*cb[0]+ab[1]*cb[1];
+  const den=Math.hypot(...ab)*Math.hypot(...cb);
+  return den?Math.acos(Math.max(-1,Math.min(1,dot/den)))*180/Math.PI:0;
+}
+function visible(p){return p&&((p.visibility??1)>.5)}
+function distLine(p,a,b){
+  const dx=b.x-a.x,dy=b.y-a.y;
+  return (p.y-(a.y+(Math.abs(dx)<1e-6?0:(p.x-a.x)*dy/dx)));
+}
+function playBeep(){
+  if(!sound)return;
+  try{const ac=new AudioContext(),o=ac.createOscillator(),g=ac.createGain();
+  o.frequency.value=880;g.gain.value=.05;o.connect(g);g.connect(ac.destination);
+  o.start();o.stop(ac.currentTime+.12);o.onended=()=>ac.close()}catch{}
+}
+function drawPose(p){
+  const w=canvas.width,h=canvas.height;
+  ctx.clearRect(0,0,w,h);
+  const edges=[[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32]];
+  ctx.lineWidth=4;ctx.lineCap="round";
+  for(const [a,b] of edges){
+    if(!visible(p[a])||!visible(p[b]))continue;
+    ctx.strokeStyle=[11,12,23,24].includes(a)&&[11,12,23,24].includes(b)?"#22c55e":"#38bdf8";
+    ctx.beginPath();ctx.moveTo(p[a].x*w,p[a].y*h);ctx.lineTo(p[b].x*w,p[b].y*h);ctx.stroke();
+  }
+  for(const q of p){if(!visible(q))continue;ctx.fillStyle="#38bdf8";ctx.beginPath();ctx.arc(q.x*w,q.y*h,4,0,Math.PI*2);ctx.fill()}
+}
+function analyze(p,now){
+  if(![11,12,13,14,15,16,23,24,27,28].every(i=>visible(p[i]))){
+    setStatus("Move full body into frame","red");$("hint").textContent="Show both shoulders, elbows, wrists, hips and ankles.";return;
+  }
+  const shoulderSpan=Math.abs(p[11].x-p[12].x);
+  const hipSpan=Math.abs(p[23].x-p[24].x);
+  const torso=(Math.abs(p[11].y-p[23].y)+Math.abs(p[12].y-p[24].y))/2;
+  const ratio=(shoulderSpan+hipSpan)/(2*Math.max(.01,torso));
+  if(ratio>=.45){
+    setStatus("Turn Sideways","red");$("hint").textContent="Show a true side profile to the camera.";
+    return;
+  }
+  const side=p[11].visibility>p[12].visibility?0:1;
+  const sh=p[side?12:11],el=p[side?14:13],wr=p[side?16:15];
+  const hip=p[side?24:23],ank=p[side?28:27];
+  const spine=angle(sh,hip,ank);
+  $("angle").textContent=Math.round(spine)+"°";
+  const offset=distLine(hip,sh,ank);
+  let form="Good Form",color="green",bad=false;
+  if(spine<170){
+    if(offset>0.015){form="Hips Sagging";color="red";bad=true}
+    else if(offset< -0.015){form="Hips Piking";color="red";bad=true}
+    else{form="Check plank";color="red";bad=true}
+  }
+  const elbow=angle(sh,el,wr);
+  // At the top, remember the shoulder position as the depth reference.
+  if(phase==="up"&&elbow>150){lastRep=now;reachedDepth=false}
+  if(elbow<90){
+    phase="down";reachedDepth=true;
+    if(bad)invalidRep=true;
+  }
+  if(phase==="down"&&bad)invalidRep=true;
+  if(phase==="down"&&elbow>160){
+    if(now-lastRep>500){
+      if(reachedDepth&&!invalidRep){
+        reps++;good++;playBeep();
+      }else if(!reachedDepth){
+        badges["Go Lower"]++;flags++;form="Go Lower";color="red";
+      }else{flags++}
+      phase="up";reachedDepth=false;invalidRep=false;lastRep=now;
+    }
+  }
+  if(bad&&phase==="down"){$("hint").textContent="Keep your body in a straight plank line.";badges[form]=(badges[form]||0)}
+  else if(form==="Good Form")$("hint").textContent="Keep your body straight and lower your chest with control.";
+  setStatus(form,color);
+}
+async function loadDetector(){
+  if(landmarker)return;
+  $("engine").textContent="Loading pose model...";
+  const vision=await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+  const files=await vision.FilesetResolver.forVisionTasks(WASM);
+  landmarker=await vision.PoseLandmarker.createFromOptions(files,{
+    baseOptions:{modelAssetPath:MODEL,delegate:"GPU"},
+    runningMode:"VIDEO",numPoses:1,
+    minPoseDetectionConfidence:.5,minPosePresenceConfidence:.5,minTrackingConfidence:.5
+  });
+  $("engine").textContent="Pose detector ready";
+}
+window.startCamera=async()=>{
+  try{
+    $("startBtn").disabled=true;
+    await loadDetector();
+    if(!stream){
+      stream=await navigator.mediaDevices.getUserMedia({
+        audio:false,video:{facingMode:front?"user":"environment",width:{ideal:640},height:{ideal:480}}
+      });
+      video.srcObject=stream;
+      await new Promise(resolve=>video.onloadedmetadata=resolve);
+      await video.play();
+    }
+    $("placeholder").style.display="none";
+    canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    paused=false;tracking=true;sessionSaved=false;
+    started=Date.now();$("pauseBtn").disabled=false;
+    $("pauseBtn").textContent="Pause";
+    setStatus("Position sideways");
+    loop();
+  }catch(e){
+    $("engine").textContent="Camera/model error: "+e.message;
+    setStatus("Camera unavailable","red");
+    $("hint").textContent="Open this site directly in Chrome, allow camera permission, and check your internet connection.";
+  }finally{$("startBtn").disabled=false}
+};
+function loop(){
+  cancelAnimationFrame(raf);
+  if(!tracking||paused)return;
+  raf=requestAnimationFrame(loop);
+  if(video.readyState<2||!landmarker)return;
+  const now=performance.now();
+  if(now-lastTick<70)return;
+  lastTick=now;
+  try{
+    const result=landmarker.detectForVideo(video,now);
+    if(result.landmarks?.length){
+      drawPose(result.landmarks[0]);analyze(result.landmarks[0],now);
+    }else{ctx.clearRect(0,0,canvas.width,canvas.height);setStatus("No person detected","red")}
+    updateStats();
+  }catch(e){$("engine").textContent="Tracking error: "+e.message}
+}
+window.togglePause=()=>{
+  if(!tracking)return;
+  paused=!paused;
+  if(paused){elapsed+=(Date.now()-started)/1000;cancelAnimationFrame(raf);$("pauseBtn").textContent="Resume";setStatus("Paused")}
+  else{started=Date.now();$("pauseBtn").textContent="Pause";loop()}
+  updateStats();
+};
+window.flipCamera=async()=>{
+  front=!front;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}
+  tracking=false;paused=false;
+  $("pauseBtn").disabled=true;$("placeholder").style.display="grid";
+  setStatus("Camera switched");
+  await startCamera();
+};
+window.toggleSound=()=>{sound=!sound;$("soundBtn").textContent="Sound: "+(sound?"On":"Off")};
+window.resetWorkout=()=>{
+  cancelAnimationFrame(raf);reps=good=flags=elapsed=0;started=0;
+  phase="up";reachedDepth=invalidRep=false;badges={"Go Lower":0,"Hips Sagging":0,"Hips Piking":0};
+  tracking=false;paused=false;sessionSaved=false;
+  $("pauseBtn").disabled=true;ctx.clearRect(0,0,canvas.width,canvas.height);
+  updateStats();setStatus("Ready to train");$("hint").textContent="Start a session when you're ready.";
+};
+window.saveWorkout=()=>{
+  if(sessionSaved){setStatus("Session already saved");return}
+  const duration=Math.floor(elapsed+((tracking&&!paused)?(Date.now()-started)/1000:0));
+  const history=JSON.parse(localStorage.getItem("ragebit-history")||"[]");
+  history.unshift({id:crypto.randomUUID?.()||String(Date.now()),startedAt:new Date(Date.now()-duration*1000).toISOString(),endedAt:new Date().toISOString(),reps,duration,good,flags,badges});
+  localStorage.setItem("ragebit-history",JSON.stringify(history.slice(0,200)));
+  sessionSaved=true;renderHistory();setStatus("Workout saved","green");
+};
+window.showPage=id=>{
+  document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active",p.id===id));
+  if(id==="history")renderHistory();
+};
+function getHistory(){try{return JSON.parse(localStorage.getItem("ragebit-history")||"[]")}catch{return []}}
+function renderHistory(){
+  const h=getHistory();
+  $("totalSessions").textContent=h.length;
+  $("totalReps").textContent=h.reduce((s,w)=>s+(w.reps||0),0);
+  $("best").textContent=h.reduce((m,w)=>Math.max(m,w.reps||0),0);
+  $("totalFlags").textContent=h.reduce((s,w)=>s+(w.flags||0),0);
+  const recent=h.slice(0,14).reverse(),max=Math.max(1,...recent.map(w=>w.reps||0));
+  $("chart").innerHTML=recent.map(w=>`<div class="barcol"><div class="bar" style="height:${Math.max(3,(w.reps||0)/max*90)}px"></div>${w.reps||0}</div>`).join("");
+  $("historyList").innerHTML=h.map(w=>`<div class="history-item"><strong>${new Date(w.endedAt).toLocaleString()}</strong><p>${w.reps} reps · ${fmt(w.duration||0)} · ${w.good||0} good-form reps · ${w.flags||0} flags</p><button data-delete="${w.id}">Delete</button></div>`).join("")||'<p class="muted">No saved workouts yet.</p>';
+  $("historyList").querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>{
+    localStorage.setItem("ragebit-history",JSON.stringify(getHistory().filter(w=>w.id!==b.dataset.delete)));renderHistory();
+  });
+}
+$("chatForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  const input=$("chatInput"),q=input.value.trim();if(!q)return;
+  const area=$("chatMessages");
+  const user=document.createElement("div");user.className="history-item";
+  const u=document.createElement("strong");u.textContent="You";user.append(u);
+  const up=document.createElement("p");up.textContent=q;user.append(up);area.append(user);
+  const coach=document.createElement("div");coach.className="history-item";
+  const c=document.createElement("strong");c.className="cyan";c.textContent="RageBit Coach";coach.append(c);
+  const p=document.createElement("p");
+  p.textContent=/pain|injur/i.test(q)?"Stop if you feel pain. Consider consulting a qualified healthcare professional before continuing.":/beginner|start/i.test(q)?"Start with 3 comfortable sets, rest 60–120 seconds, and keep every rep controlled. Use wall or incline push-ups if needed.":/form|back|hip|sag/i.test(q)?"Keep your head, shoulders, hips, and ankles aligned. Use a side-view recording to review your technique, and stop when you cannot maintain control.":"Try 3–4 controlled sets with good technique, resting 60–120 seconds between sets. Increase reps gradually and take recovery days.";
+  coach.append(p);area.append(coach);input.value="";coach.scrollIntoView({behavior:"smooth",block:"nearest"});
+});
+renderHistory();
+</script>
+</body>
+                                                                                  </html>
+
